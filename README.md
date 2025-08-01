@@ -2,6 +2,8 @@ TUI base maplestory resource file unpack tool.
 
 fast and lower memory usage.
 
+![Screenshot](/assets/screenshot.png "Screenshot")
+
 ## Build
 
 ```bash
