@@ -2,13 +2,13 @@
 name = "horntail_cli"
 version = "0.3.0"
 edition = "2024"
-description = "maplestory resource file unpack commandline tool."
+description = "maplestory resource file commandline tool."
 repository = "https://github.com/anonymous5l/horntail"
 license = "MIT"
 categories = ["command-line-utilities"]
 
 [dependencies]
-ratatui-image = "4.2.0"
+ratatui-image = "8.0.1"
 tui-input = "0.14.0"
 ratatui = "0.29.0"
 crossterm = "0.28.1"
@@ -16,3 +16,4 @@ clap = { version = "4", features = ["derive"] }
 ahash = "0.8.12"
 walkdir = "2"
 horntail = { path = "../horntail" }
+image = "0.25.6"
