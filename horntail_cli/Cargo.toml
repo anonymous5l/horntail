@@ -1,0 +1,16 @@
+[package]
+name = "horntail_cli"
+version = "0.3.0"
+edition = "2024"
+
+[dependencies]
+ratatui-image = "4.2.0"
+tui-input = "0.14.0"
+image = "0.25.5"
+ratatui = "0.29.0"
+crossterm = "0.28.1"
+clap = { version = "4", features = ["derive"] }
+ahash = "0.8.12"
+memmap2 = "0.9.7"
+walkdir = "2"
+horntail = { path = "../horntail" }
