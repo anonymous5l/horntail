@@ -1,0 +1,1 @@
+Simple parse maplestory resource file lib supported `wz` & `ms` file extension.

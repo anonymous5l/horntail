@@ -157,8 +157,10 @@ impl TryFromAccessor for Canvas {
     ) -> Result<Self, Self::Error> {
         let attr = CanvasAttribute::try_from_accessor(opt, accessor)?;
 
-        let data = if accessor.get_u16_le() != ZLIB_HEADER_BYTE {
-            accessor.try_seek(SeekFrom::Current(-2))?;
+        let flag = accessor.get_u16_le();
+        accessor.try_seek(SeekFrom::Current(-2))?;
+
+        let data = if flag != ZLIB_HEADER_BYTE {
             // decrypt image data
             let mut de_data = Vec::with_capacity(attr.data_size);
             while accessor.has_remaining() {
@@ -173,7 +175,6 @@ impl TryFromAccessor for Canvas {
         };
 
         let raw_data_size = attr.format.data_size(attr.size.x, attr.size.y) as usize;
-
         let mut zlib_dec = flate2::read::ZlibDecoder::new_with_buf(
             &*data,
             vec![0; raw_data_size.max(attr.data_size).min(32 * 1024)],
