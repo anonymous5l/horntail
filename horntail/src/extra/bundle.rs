@@ -26,16 +26,21 @@ impl Bundle {
         no_version: bool,
     ) -> Result<Option<Bundle>, Error> {
         let path = path.as_ref();
-        let file_name = path
-            .file_name()
+        let file_stem = path
+            .file_stem()
             .and_then(|f| f.to_str())
             .ok_or(error::io_err_invalid_input())?;
         let (path, parent_path) = if !path.is_file() {
-            let file = path.join(file_name).with_extension(WizetFile::EXTENSION);
-            if !file.exists() {
-                return Ok(None);
+            let test = path.with_extension(WizetFile::EXTENSION);
+            if test.exists() {
+                (test, path.parent().ok_or(error::io_err_invalid_input())?)
+            } else {
+                let file = path.join(file_stem).with_extension(WizetFile::EXTENSION);
+                if !file.exists() {
+                    return Ok(None);
+                }
+                (file, path)
             }
-            (file, path)
         } else {
             (
                 path.to_path_buf(),
@@ -46,7 +51,7 @@ impl Bundle {
         let (files, parent_path) =
             if let Some(files) = load_complex_struct(path.as_path(), version, no_version) {
                 let parent_path = if parent_path
-                    .file_name()
+                    .file_stem()
                     .and_then(|s| s.to_str())
                     .ok_or(error::io_err_invalid_input())?
                     == "Base"
