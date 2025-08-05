@@ -14,8 +14,8 @@ use std::io::SeekFrom;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-pub const ROW_FLAG_INITIALIZED: u8 = 1;
-pub const ROW_FLAG_EXPANDED: u8 = 1 << 1;
+pub const ROW_FLAG_INITIALIZED: u64 = 1 << 63;
+pub const ROW_FLAG_EXPANDED: u64 = 1 << 62;
 
 #[derive(Copy, Clone)]
 pub enum PrimitiveKind {
@@ -73,6 +73,59 @@ impl IndexKind {
     }
 }
 
+impl From<u64> for IndexKind {
+    fn from(value: u64) -> Self {
+        let v = (value >> 56) & 0x1f;
+        match v {
+            1 => IndexKind::Primitive(PrimitiveKind::Nil),
+            2 => IndexKind::Primitive(PrimitiveKind::Int16),
+            3 => IndexKind::Primitive(PrimitiveKind::Int32),
+            4 => IndexKind::Primitive(PrimitiveKind::Int64),
+            5 => IndexKind::Primitive(PrimitiveKind::Float32),
+            6 => IndexKind::Primitive(PrimitiveKind::Float64),
+            7 => IndexKind::Primitive(PrimitiveKind::String),
+            8 => IndexKind::Element(EntryKind::Folder),
+            9 => IndexKind::Element(EntryKind::Image(ImageKind::Canvas)),
+            10 => IndexKind::Element(EntryKind::Image(ImageKind::Video)),
+            11 => IndexKind::Element(EntryKind::Image(ImageKind::Convex2D)),
+            12 => IndexKind::Element(EntryKind::Image(ImageKind::Vector2D)),
+            13 => IndexKind::Element(EntryKind::Image(ImageKind::UOL)),
+            14 => IndexKind::Element(EntryKind::Image(ImageKind::Sound)),
+            15 => IndexKind::Element(EntryKind::Image(ImageKind::RawData)),
+            16 => IndexKind::Element(EntryKind::Image(ImageKind::Script)),
+            17 => IndexKind::Element(EntryKind::Property(PropertyKind::Encode)),
+            18 => IndexKind::Element(EntryKind::Property(PropertyKind::Plain)),
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl From<IndexKind> for u64 {
+    fn from(value: IndexKind) -> Self {
+        let flag: u64 = match value {
+            IndexKind::Primitive(PrimitiveKind::Nil) => 1,
+            IndexKind::Primitive(PrimitiveKind::Int16) => 2,
+            IndexKind::Primitive(PrimitiveKind::Int32) => 3,
+            IndexKind::Primitive(PrimitiveKind::Int64) => 4,
+            IndexKind::Primitive(PrimitiveKind::Float32) => 5,
+            IndexKind::Primitive(PrimitiveKind::Float64) => 6,
+            IndexKind::Primitive(PrimitiveKind::String) => 7,
+            IndexKind::Element(EntryKind::Folder) => 8,
+            IndexKind::Element(EntryKind::Image(ImageKind::Canvas)) => 9,
+            IndexKind::Element(EntryKind::Image(ImageKind::Video)) => 10,
+            IndexKind::Element(EntryKind::Image(ImageKind::Convex2D)) => 11,
+            IndexKind::Element(EntryKind::Image(ImageKind::Vector2D)) => 12,
+            IndexKind::Element(EntryKind::Image(ImageKind::UOL)) => 13,
+            IndexKind::Element(EntryKind::Image(ImageKind::Sound)) => 14,
+            IndexKind::Element(EntryKind::Image(ImageKind::RawData)) => 15,
+            IndexKind::Element(EntryKind::Image(ImageKind::Script)) => 16,
+            IndexKind::Element(EntryKind::Property(PropertyKind::Encode)) => 17,
+            IndexKind::Element(EntryKind::Property(PropertyKind::Plain)) => 18,
+        };
+        flag << 56
+    }
+}
+
 pub struct IndexGroup {
     pub parent_offset: usize,
     pub file: Rc<PathBuf>,
@@ -84,10 +137,8 @@ pub struct HorntailRow {
     pub offset: usize,
     pub name: RefString,
     pub desc: RefString,
-    pub kind: IndexKind,
     pub group: Rc<IndexGroup>,
-    pub flag: u8,
-    pub size: usize,
+    pub flag_and_size: u64,
     pub leaf: Option<Vec<HorntailRow>>,
 }
 
@@ -122,12 +173,12 @@ impl HorntailRow {
 
     #[inline]
     pub fn is_initialized(&self) -> bool {
-        self.flag & ROW_FLAG_INITIALIZED == ROW_FLAG_INITIALIZED
+        self.flag_and_size & ROW_FLAG_INITIALIZED == ROW_FLAG_INITIALIZED
     }
 
     #[inline]
     pub fn is_expand(&self) -> bool {
-        self.flag & ROW_FLAG_EXPANDED == ROW_FLAG_EXPANDED
+        self.flag_and_size & ROW_FLAG_EXPANDED == ROW_FLAG_EXPANDED
     }
 
     pub fn sort_rows(rows: &mut [HorntailRow]) {
@@ -151,10 +202,9 @@ impl HorntailRow {
     fn merge_rows(a: Vec<HorntailRow>, b: &mut Vec<HorntailRow>) {
         a.into_iter().for_each(|row| {
             if let Some(target) = b.iter_mut().find(|x| x.name() == row.name()) {
-                target.flag &= !ROW_FLAG_INITIALIZED;
+                target.flag_and_size &= !ROW_FLAG_INITIALIZED;
                 target.name = row.name;
                 target.desc = row.desc;
-                target.kind = row.kind;
                 target.offset = row.offset;
                 target.group = row.group;
                 if let Some(leaf) = row.leaf {
@@ -171,11 +221,12 @@ impl HorntailRow {
     }
 
     pub fn initialize(&mut self) {
-        if !has_leaf(self.kind) || self.is_initialized() {
+        let kind = IndexKind::from(self.flag_and_size);
+        if !has_leaf(kind) || self.is_initialized() {
             return;
         }
 
-        self.flag |= ROW_FLAG_INITIALIZED;
+        self.flag_and_size |= ROW_FLAG_INITIALIZED;
         let rows = build_rows(
             &self.name,
             AccessorOpt {
@@ -183,7 +234,7 @@ impl HorntailRow {
                 ver_hash: self.group.structure.ver_hash,
                 parent_offset: self.group.parent_offset,
             },
-            self.kind,
+            kind,
             &self.group,
         );
 
@@ -202,19 +253,21 @@ impl HorntailRow {
 
     #[inline]
     fn adjust_expand_size(&mut self) {
-        self.size = 0;
+        self.flag_and_size &= 0xFF00000000000000;
         if self.is_expand() {
             if let Some(leaf) = self.leaf.as_ref() {
-                self.size = leaf.iter().fold(0, |acc, leaf| acc + leaf.size + 1);
+                self.flag_and_size |= leaf
+                    .iter()
+                    .fold(0, |acc, leaf| acc + leaf.expand_size() + 1);
             }
         }
     }
 
     #[inline]
-    fn get_mut_by_paths(&mut self, paths: &[usize]) -> Option<&mut HorntailRow> {
+    fn get_mut_by_paths(&mut self, paths: &[u64]) -> Option<&mut HorntailRow> {
         paths.iter().copied().try_fold(&mut *self, |cursor, index| {
             if let Some(leaf) = cursor.leaf.as_mut() {
-                leaf.get_mut(index)
+                leaf.get_mut(index as usize)
             } else {
                 None
             }
@@ -222,10 +275,23 @@ impl HorntailRow {
     }
 
     #[inline]
-    pub fn get_by_paths(&self, paths: &[usize]) -> &HorntailRow {
+    pub fn get_with_paths(&self, paths: &[u64]) -> (PathBuf, &HorntailRow) {
+        let p = PathBuf::default();
+        paths.iter().copied().fold((p, self), |(p, cursor), index| {
+            if let Some(leaf) = cursor.leaf.as_ref() {
+                let leaf = &leaf[index as usize];
+                (p.join::<&str>(leaf.name.as_ref()), leaf)
+            } else {
+                panic!("invalid index")
+            }
+        })
+    }
+
+    #[inline]
+    pub fn get_by_paths(&self, paths: &[u64]) -> &HorntailRow {
         paths.iter().copied().fold(self, |cursor, index| {
             if let Some(leaf) = cursor.leaf.as_ref() {
-                &leaf[index]
+                &leaf[index as usize]
             } else {
                 panic!("invalid index")
             }
@@ -243,7 +309,7 @@ impl HorntailRow {
     }
 
     #[inline]
-    pub fn toggle_paths(&mut self, paths: &[usize]) {
+    pub fn toggle_paths(&mut self, paths: &[u64]) {
         let Some(target) = self.get_mut_by_paths(paths) else {
             return;
         };
@@ -255,7 +321,7 @@ impl HorntailRow {
     }
 
     #[inline]
-    pub fn toggle_recursive(&mut self, paths: &[usize], depth: Option<usize>) {
+    pub fn toggle_recursive(&mut self, paths: &[u64], depth: Option<usize>) {
         let Some(target) = self.get_mut_by_paths(paths) else {
             return;
         };
@@ -267,23 +333,23 @@ impl HorntailRow {
     }
 
     pub fn expand(&mut self) {
-        if !has_leaf(self.kind) {
+        if !has_leaf(IndexKind::from(self.flag_and_size)) {
             return;
         }
 
         self.initialize();
-        self.flag |= ROW_FLAG_EXPANDED;
+        self.flag_and_size |= ROW_FLAG_EXPANDED;
         self.adjust_expand_size();
     }
 
-    pub fn expand_paths(&mut self, paths: &[usize]) {
-        fn _expand(cache: &mut HorntailRow, paths: &[usize]) {
+    pub fn expand_paths(&mut self, paths: &[u64]) {
+        fn _expand(cache: &mut HorntailRow, paths: &[u64]) {
             if !cache.is_expand() {
                 cache.expand();
             }
             if let Some((first, last)) = paths.split_first() {
                 if let Some(leaf) = cache.leaf.as_mut() {
-                    _expand(&mut leaf[*first], last);
+                    _expand(&mut leaf[*first as usize], last);
                 }
                 cache.adjust_expand_size();
             }
@@ -291,7 +357,7 @@ impl HorntailRow {
         _expand(self, paths);
     }
 
-    pub fn expand_recursive(&mut self, paths: &[usize], depth: Option<usize>) {
+    pub fn expand_recursive(&mut self, paths: &[u64], depth: Option<usize>) {
         fn _expand_recursive_internal(cache: &mut HorntailRow, depth: Option<usize>) {
             if let Some(0) = depth {
                 return;
@@ -306,7 +372,7 @@ impl HorntailRow {
             }
             cache.adjust_expand_size();
         }
-        fn _expand_recursive(cache: &mut HorntailRow, paths: &[usize], depth: Option<usize>) {
+        fn _expand_recursive(cache: &mut HorntailRow, paths: &[u64], depth: Option<usize>) {
             let Some((first, last)) = paths.split_first() else {
                 _expand_recursive_internal(cache, depth);
                 return;
@@ -317,7 +383,7 @@ impl HorntailRow {
             }
 
             if let Some(leaf) = cache.leaf.as_mut() {
-                _expand_recursive(&mut leaf[*first], last, depth);
+                _expand_recursive(&mut leaf[*first as usize], last, depth);
             }
             cache.adjust_expand_size();
         }
@@ -325,26 +391,26 @@ impl HorntailRow {
     }
 
     pub fn collapse(&mut self) {
-        self.flag &= !ROW_FLAG_EXPANDED;
+        self.flag_and_size &= !ROW_FLAG_EXPANDED;
         self.adjust_expand_size();
     }
 
-    pub fn collapse_paths(&mut self, paths: &[usize]) {
-        fn _collapse(cache: &mut HorntailRow, paths: &[usize]) {
+    pub fn collapse_paths(&mut self, paths: &[u64]) {
+        fn _collapse(cache: &mut HorntailRow, paths: &[u64]) {
             let Some((first, last)) = paths.split_first() else {
                 cache.collapse();
                 return;
             };
 
             if let Some(leaf) = cache.leaf.as_mut() {
-                _collapse(&mut leaf[*first], last);
+                _collapse(&mut leaf[*first as usize], last);
             }
             cache.adjust_expand_size();
         }
         _collapse(self, paths);
     }
 
-    pub fn collapse_recursive(&mut self, paths: &[usize], depth: Option<usize>) {
+    pub fn collapse_recursive(&mut self, paths: &[u64], depth: Option<usize>) {
         fn _collapse_recursive_internal(cache: &mut HorntailRow, depth: Option<usize>) {
             if let Some(0) = depth {
                 return;
@@ -358,13 +424,13 @@ impl HorntailRow {
                 cache.collapse();
             }
         }
-        fn _collapse_recursive(cache: &mut HorntailRow, paths: &[usize], depth: Option<usize>) {
+        fn _collapse_recursive(cache: &mut HorntailRow, paths: &[u64], depth: Option<usize>) {
             let Some((first, last)) = paths.split_first() else {
                 _collapse_recursive_internal(cache, depth);
                 return;
             };
             if let Some(leaf) = cache.leaf.as_mut() {
-                _collapse_recursive(&mut leaf[*first], last, depth);
+                _collapse_recursive(&mut leaf[*first as usize], last, depth);
             }
             cache.adjust_expand_size();
         }
@@ -372,12 +438,18 @@ impl HorntailRow {
     }
 
     #[inline]
-    pub fn expand_size(&self) -> usize {
-        if self.is_expand() { self.size } else { 0 }
+    pub fn expand_size(&self) -> u64 {
+        if self.is_expand() {
+            self.flag_and_size & !0xFF00000000000000
+        } else {
+            0
+        }
     }
 
     pub fn to_canvas(&self) -> Option<Canvas> {
-        let IndexKind::Element(EntryKind::Image(ImageKind::Canvas)) = self.kind else {
+        let IndexKind::Element(EntryKind::Image(ImageKind::Canvas)) =
+            IndexKind::from(self.flag_and_size)
+        else {
             return None;
         };
 
@@ -499,13 +571,11 @@ fn process_property(
 
             HorntailRow {
                 name: string_pool_get(p.name),
-                kind,
                 offset,
                 group: group.clone(),
                 desc: string_pool_get(value.to_string()),
                 leaf: None,
-                flag: 0,
-                size: 0,
+                flag_and_size: u64::from(kind),
             }
         })
         .collect::<Vec<_>>();
@@ -525,7 +595,6 @@ fn process_folder(
         .map(|f| HorntailRow {
             name: string_pool_get(f.name),
             offset: f.offset,
-            kind: IndexKind::Element(f.kind),
             group: Rc::new(IndexGroup {
                 parent_offset: f.parent_offset,
                 file: group.file.clone(),
@@ -534,8 +603,7 @@ fn process_folder(
             }),
             desc: string_empty(),
             leaf: None,
-            flag: 0,
-            size: 0,
+            flag_and_size: u64::from(IndexKind::Element(f.kind)),
         })
         .collect::<Vec<_>>();
 
@@ -587,12 +655,10 @@ fn build_plain_properties_rows(
             HorntailRow {
                 name: string_pool_get(row.name.to_string()),
                 desc: value,
-                kind,
                 offset: opt.offset,
                 group: group.clone(),
                 leaf,
-                flag: ROW_FLAG_INITIALIZED,
-                size: 0,
+                flag_and_size: ROW_FLAG_INITIALIZED | u64::from(kind),
             }
         })
         .collect::<Vec<_>>();

@@ -1,6 +1,6 @@
 [package]
 name = "horntail"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2024"
 description = "maplestory resource file unpack lib"
 repository = "https://github.com/anonymous5l/horntail"
@@ -10,13 +10,15 @@ authors = ["Anonymous5L"]
 exclude = ["tests"]
 
 [features]
-default = ["image"]
+default = ["image", "extra"]
 image = ["dep:image"]
+extra = ["dep:ahash"]
 
 [dependencies]
 uuid = "1"
 memmap2 = "0.9.7"
 aes = "0.8.4"
-flate2 = { version = "1.0.35", features = ["zlib"] }
+flate2 = { version = "1.1.2", features = ["zlib"] }
 image = { version = "0.25.6", optional = true }
 encoding_rs = { version = "0.8.35" }
+ahash = { version = "0.8.12", optional = true }

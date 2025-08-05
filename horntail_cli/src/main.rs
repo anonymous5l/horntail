@@ -148,7 +148,6 @@ fn view_command(
         HorntailRow {
             name: string_pool_get("Root".to_string()),
             offset: 0,
-            kind: IndexKind::Element(EntryKind::Folder),
             group: Rc::new(IndexGroup {
                 parent_offset: 0,
                 file: Rc::new(root.parent.clone()),
@@ -157,8 +156,10 @@ fn view_command(
             }),
             desc: string_empty(),
             leaf: Some(leaf),
-            flag: ROW_FLAG_EXPANDED | ROW_FLAG_INITIALIZED,
-            size,
+            flag_and_size: ROW_FLAG_EXPANDED
+                | ROW_FLAG_INITIALIZED
+                | size as u64
+                | u64::from(IndexKind::Element(EntryKind::Folder)),
         }
     } else {
         let shared_structure = Rc::new(SharedStructure {
@@ -197,7 +198,6 @@ fn view_command(
         HorntailRow {
             name: string_pool_get("Root".to_string()),
             offset: 0,
-            kind: IndexKind::Element(EntryKind::Folder),
             desc: string_empty(),
             group: Rc::new(IndexGroup {
                 parent_offset: 0,
@@ -206,8 +206,10 @@ fn view_command(
                 builder: None,
             }),
             leaf: Some(rows),
-            flag: ROW_FLAG_EXPANDED | ROW_FLAG_INITIALIZED,
-            size,
+            flag_and_size: ROW_FLAG_EXPANDED
+                | ROW_FLAG_INITIALIZED
+                | size as u64
+                | u64::from(IndexKind::Element(EntryKind::Folder)),
         }
     };
 

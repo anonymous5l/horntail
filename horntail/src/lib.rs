@@ -6,6 +6,8 @@ pub mod consts;
 pub mod crypto;
 mod entry;
 pub mod error;
+#[cfg(feature = "extra")]
+pub mod extra;
 pub mod reader;
 
 pub use entry::*;

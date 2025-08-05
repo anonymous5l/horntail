@@ -57,10 +57,9 @@ impl PackBundle {
                     structure: self.structure.clone(),
                     builder: None,
                 }),
-                kind: IndexKind::Element(EntryKind::Folder),
                 leaf: Some(leaf),
-                flag: ROW_FLAG_INITIALIZED,
-                size: 0,
+                flag_and_size: ROW_FLAG_INITIALIZED
+                    | u64::from(IndexKind::Element(EntryKind::Folder)),
             });
         } else {
             root.push(row);
@@ -95,7 +94,6 @@ impl PackBundle {
                             .unwrap_or("")
                             .to_string(),
                     ),
-                    kind: IndexKind::Element(image.kind),
                     offset: image.offset,
                     group: Rc::new(IndexGroup {
                         parent_offset: 0,
@@ -105,8 +103,7 @@ impl PackBundle {
                     }),
                     desc: string_empty(),
                     leaf: Some(vec![]),
-                    flag: 0,
-                    size: 0,
+                    flag_and_size: u64::from(IndexKind::Element(image.kind)),
                 };
 
                 if let Some(mut components) = fullpath.parent().map(|p| p.components()) {

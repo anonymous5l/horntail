@@ -146,7 +146,7 @@ fn load_nested_files(
     for index in 0..=count {
         root.push(load_single_file(
             parent
-                .join(format!("{}_{index:03}", stem.to_string_lossy()))
+                .join(format!("{}_{index:0>3}", stem.to_string_lossy()))
                 .with_extension(WizetFile::EXTENSION),
             ver,
             no_version,

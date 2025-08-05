@@ -173,6 +173,9 @@ fn handle_selection(
         return;
     };
 
+    let path = horntail_view_state.selected_paths();
+    horntail_view_state.set_title_suffix(path.to_str().unwrap());
+
     let row = horntail_view_state.selected();
     let Some(canvas) = row.to_canvas() else {
         *image_offset = 0;

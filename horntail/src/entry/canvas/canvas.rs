@@ -163,11 +163,16 @@ impl TryFromAccessor for Canvas {
         let data = if flag != ZLIB_HEADER_BYTE {
             // decrypt image data
             let mut de_data = Vec::with_capacity(attr.data_size);
-            while accessor.has_remaining() {
+            let mut progress = 0;
+            while accessor.has_remaining() && progress < attr.data_size {
                 let size = accessor.get_i32_le() as usize;
                 let off = de_data.len();
-                de_data.resize(off + size, 0);
+                // make dirty data
+                unsafe {
+                    de_data.set_len(off + size);
+                }
                 accessor.decrypt_to_slice(&mut de_data[off..off + size]);
+                progress += size + 4;
             }
             de_data
         } else {

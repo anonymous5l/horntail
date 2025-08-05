@@ -1,6 +1,6 @@
 [package]
 name = "horntail_cli"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 description = "maplestory resource file commandline tool."
 repository = "https://github.com/anonymous5l/horntail"

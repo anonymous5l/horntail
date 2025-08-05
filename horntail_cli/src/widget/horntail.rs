@@ -19,10 +19,11 @@ const SPACE_MARK: [&str; 2] = ["   ", "│  "];
 pub struct HorntailViewState<'a> {
     root: HorntailRow,
     block_template: Block<'a>,
-    selected_index: usize,
+    title: String,
+    selected_index: u64,
     // calculate properties
-    view_offset: usize,
-    view_height: usize,
+    view_offset: u64,
+    view_height: u64,
 }
 
 impl HorntailViewState<'_> {
@@ -34,6 +35,7 @@ impl HorntailViewState<'_> {
         Ok(HorntailViewState {
             root,
             block_template,
+            title: "Resource".to_owned(),
             selected_index: 0,
             view_offset: 0,
             view_height: 0,
@@ -41,8 +43,21 @@ impl HorntailViewState<'_> {
     }
 
     #[inline]
+    pub fn set_title_suffix(&mut self, suffix: &str) {
+        self.title = suffix.to_owned();
+    }
+
+    #[inline]
     pub fn get_by_name_paths(&mut self, paths: &str) -> Option<&HorntailRow> {
         self.root.get_by_name_paths(paths)
+    }
+
+    #[inline]
+    pub fn selected_paths(&self) -> PathBuf {
+        let (path, _) = self
+            .root
+            .get_with_paths(&get_paths_by_index(&self.root, self.selected_index));
+        path
     }
 
     #[inline]
@@ -52,7 +67,7 @@ impl HorntailViewState<'_> {
     }
 
     #[inline]
-    pub fn set_selected_index(&mut self, selected_index: usize) {
+    pub fn set_selected_index(&mut self, selected_index: u64) {
         self.selected_index = selected_index.clamp(0, self.root.expand_size() - 1)
     }
 
@@ -156,31 +171,31 @@ impl HorntailView<'_> {
     fn render_ref(&self, area: Rect, buf: &mut Buffer, state: &mut HorntailViewState) {
         let table_area = area.inner(Margin::new(0, 1));
 
-        state.view_offset = if state.selected_index
-            >= state.view_offset.saturating_add(table_area.height as usize)
-        {
-            state
-                .selected_index
-                .saturating_sub(table_area.height.saturating_sub(1) as usize)
-        } else if state.selected_index < state.view_offset {
-            state.selected_index
-        } else if state.root.expand_size().saturating_sub(state.view_offset)
-            < table_area.height as usize
-        {
-            state
-                .root
-                .expand_size()
-                .saturating_sub(table_area.height as usize)
-        } else {
-            state.view_offset
-        };
+        state.view_offset =
+            if state.selected_index >= state.view_offset.saturating_add(table_area.height as u64) {
+                state
+                    .selected_index
+                    .saturating_sub(table_area.height.saturating_sub(1) as u64)
+            } else if state.selected_index < state.view_offset {
+                state.selected_index
+            } else if state.root.expand_size().saturating_sub(state.view_offset)
+                < table_area.height as u64
+            {
+                state
+                    .root
+                    .expand_size()
+                    .saturating_sub(table_area.height as u64)
+            } else {
+                state.view_offset
+            };
 
-        state.view_height = table_area.height as usize;
+        state.view_height = table_area.height as u64;
 
-        let mut scrollbar_state =
-            ScrollbarState::new(state.root.expand_size()).position(state.selected_index);
-        let mut table_state = TableState::new()
-            .with_selected(Some(state.selected_index.saturating_sub(state.view_offset)));
+        let mut scrollbar_state = ScrollbarState::new(state.root.expand_size() as usize)
+            .position(state.selected_index as usize);
+        let mut table_state = TableState::new().with_selected(Some(
+            state.selected_index.saturating_sub(state.view_offset) as usize,
+        ));
 
         Table::new(
             build_table_rows(&state.root, state.view_offset, table_area.height as usize),
@@ -193,7 +208,10 @@ impl HorntailView<'_> {
             ],
         )
         .row_highlight_style(Style::new().black().on_white())
-        .block(state.block_template.clone().title("Resource"))
+        .block(state.block_template.clone().title(Line::styled(
+            state.title.as_str(),
+            Style::new().black().on_white(),
+        )))
         .render(area, buf, &mut table_state);
 
         Scrollbar::new(ScrollbarOrientation::VerticalRight)
@@ -211,7 +229,7 @@ impl<'a> StatefulWidget for HorntailView<'a> {
 }
 
 fn colorful_data_type(row: &HorntailRow) -> Span {
-    let style = match row.kind {
+    let style = match IndexKind::from(row.flag_and_size) {
         IndexKind::Primitive(_) => Style::new().light_green(),
         IndexKind::Element(kind) => match kind {
             EntryKind::Folder | EntryKind::Property(_) => Style::new().light_cyan(),
@@ -229,8 +247,8 @@ fn colorful_data_type(row: &HorntailRow) -> Span {
     Span::styled(row.name(), style)
 }
 
-fn get_paths_by_index(cache: &HorntailRow, index: usize) -> Vec<usize> {
-    fn _find_paths(cache: &HorntailRow, index: usize, mut acc: usize) -> Vec<usize> {
+fn get_paths_by_index(cache: &HorntailRow, index: u64) -> Vec<u64> {
+    fn _find_paths(cache: &HorntailRow, index: u64, mut acc: u64) -> Vec<u64> {
         let mut result = Vec::with_capacity(0);
         for (pos, leaf) in cache.children().iter().enumerate() {
             let temp = acc + leaf.expand_size();
@@ -238,7 +256,7 @@ fn get_paths_by_index(cache: &HorntailRow, index: usize) -> Vec<usize> {
                 acc = temp + 1;
                 continue;
             }
-            result.insert(0, pos);
+            result.insert(0, pos as u64);
             if acc < index {
                 result.extend(_find_paths(leaf, index, acc + 1));
             }
@@ -250,24 +268,24 @@ fn get_paths_by_index(cache: &HorntailRow, index: usize) -> Vec<usize> {
     _find_paths(cache, index, 0)
 }
 
-fn get_index_by_paths(root: &HorntailRow, paths: &[usize]) -> usize {
+fn get_index_by_paths(root: &HorntailRow, paths: &[u64]) -> u64 {
     paths
         .iter()
         .copied()
         .fold((root, 0), |(cursor, mut acc), index| {
             if cursor.is_expand() {
-                acc += cursor.children()[..index]
+                acc += cursor.children()[..index as usize]
                     .iter()
                     .fold(0, |acc, leaf| acc + leaf.expand_size())
                     + 1;
             }
-            (&cursor.children()[index], acc + index)
+            (&cursor.children()[index as usize], acc + index)
         })
         .1
         - 1
 }
 
-fn build_table_rows(root: &HorntailRow, view_offset: usize, mut view_size: usize) -> Vec<Row> {
+fn build_table_rows(root: &HorntailRow, view_offset: u64, mut view_size: usize) -> Vec<Row> {
     fn _build_row(prefix: String, row: &HorntailRow) -> Row {
         Row::new([
             Line::from(vec![
@@ -275,7 +293,7 @@ fn build_table_rows(root: &HorntailRow, view_offset: usize, mut view_size: usize
                 colorful_data_type(row),
             ]),
             Line::from(format!("{:#X}", row.offset)).alignment(Alignment::Left),
-            Line::from(row.kind.as_str()),
+            Line::from(IndexKind::from(row.flag_and_size).as_str()),
             Line::from(
                 PathBuf::from(&*row.group.file)
                     .file_name()
@@ -332,7 +350,7 @@ fn build_table_rows(root: &HorntailRow, view_offset: usize, mut view_size: usize
     fn _build_view<'a>(
         prefix: String,
         cache: &'a [HorntailRow],
-        paths: &[usize],
+        paths: &[u64],
         rows: &mut Vec<Row<'a>>,
         view_size: &mut usize,
     ) {
@@ -340,21 +358,21 @@ fn build_table_rows(root: &HorntailRow, view_offset: usize, mut view_size: usize
             return;
         };
         let cache = if !last.is_empty() {
-            let mask = if *first == cache.len().saturating_sub(1) {
+            let mask = if *first == cache.len().saturating_sub(1) as u64 {
                 SPACE_MARK[0]
             } else {
                 SPACE_MARK[1]
             };
             _build_view(
                 prefix.clone() + mask,
-                cache[*first].children(),
+                cache[*first as usize].children(),
                 last,
                 rows,
                 view_size,
             );
-            &cache[*first + 1..]
+            &cache[*first as usize + 1..]
         } else {
-            &cache[*first..]
+            &cache[*first as usize..]
         };
 
         if !cache.is_empty() && *view_size > 0 {
@@ -373,11 +391,11 @@ fn build_table_rows(root: &HorntailRow, view_offset: usize, mut view_size: usize
     rows
 }
 
-fn find_next_expand_node(cache: &HorntailRow, paths: &[usize]) -> Vec<usize> {
-    fn _find_next_expand(cache: &HorntailRow, paths: &[usize]) -> Vec<usize> {
+fn find_next_expand_node(cache: &HorntailRow, paths: &[u64]) -> Vec<u64> {
+    fn _find_next_expand(cache: &HorntailRow, paths: &[u64]) -> Vec<u64> {
         let mut skip = 0;
         if let Some((first, last)) = paths.split_first() {
-            let mut result = _find_next_expand(&cache.children()[*first], last);
+            let mut result = _find_next_expand(&cache.children()[*first as usize], last);
             if !result.is_empty() {
                 result.insert(0, *first);
                 return result;
@@ -393,24 +411,24 @@ fn find_next_expand_node(cache: &HorntailRow, paths: &[usize]) -> Vec<usize> {
             .children()
             .iter()
             .enumerate()
-            .skip(skip)
+            .skip(skip as usize)
             .find(|(_, leaf)| leaf.is_expand())
-            .map(|(index, _)| vec![index])
+            .map(|(index, _)| vec![index as u64])
             .unwrap_or_default()
     }
 
     _find_next_expand(cache, paths)
 }
 
-fn find_next_node(cache: &HorntailRow, paths: &[usize], text: &str) -> Vec<usize> {
+fn find_next_node(cache: &HorntailRow, paths: &[u64], text: &str) -> Vec<u64> {
     if text.is_empty() {
         return Vec::with_capacity(0);
     }
 
-    fn _find_next_node(cache: &HorntailRow, paths: &[usize], text: &str) -> Vec<usize> {
+    fn _find_next_node(cache: &HorntailRow, paths: &[u64], text: &str) -> Vec<u64> {
         let mut skip = 0;
         if let Some((first, last)) = paths.split_first() {
-            let mut result = _find_next_node(&cache.children()[*first], last, text);
+            let mut result = _find_next_node(&cache.children()[*first as usize], last, text);
             if !result.is_empty() {
                 result.insert(0, *first);
                 return result;
@@ -422,14 +440,14 @@ fn find_next_node(cache: &HorntailRow, paths: &[usize], text: &str) -> Vec<usize
             .children()
             .iter()
             .enumerate()
-            .skip(skip)
+            .skip(skip as usize)
             .find_map(|(index, leaf)| {
                 if leaf.name().contains(text) {
-                    return Some(vec![index]);
+                    return Some(vec![index as u64]);
                 }
                 let mut result = _find_next_node(leaf, &[], text);
                 if !result.is_empty() {
-                    result.insert(0, index);
+                    result.insert(0, index as u64);
                     return Some(result);
                 }
                 None
@@ -440,69 +458,69 @@ fn find_next_node(cache: &HorntailRow, paths: &[usize], text: &str) -> Vec<usize
     _find_next_node(cache, paths, text)
 }
 
-fn find_prev_expand_node(cache: &HorntailRow, paths: &[usize]) -> Vec<usize> {
-    fn _rfind_expand_node(cache: &[HorntailRow]) -> Vec<usize> {
+fn find_prev_expand_node(cache: &HorntailRow, paths: &[u64]) -> Vec<u64> {
+    fn _rfind_expand_node(cache: &[HorntailRow]) -> Vec<u64> {
         let mut result = Vec::with_capacity(0);
         cache.iter().enumerate().rfind(|(index, leaf)| {
             if !leaf.is_expand() {
                 return false;
             }
-            result.push(*index);
+            result.push(*index as u64);
             result.extend(_rfind_expand_node(leaf.children()));
             true
         });
         result
     }
 
-    fn _find_prev_expand(cache: &HorntailRow, paths: &[usize]) -> Vec<usize> {
+    fn _find_prev_expand(cache: &HorntailRow, paths: &[u64]) -> Vec<u64> {
         let Some((first, last)) = paths.split_first() else {
             return Vec::with_capacity(0);
         };
         if !last.is_empty() {
-            let mut result = _find_prev_expand(&cache.children()[*first], last);
+            let mut result = _find_prev_expand(&cache.children()[*first as usize], last);
             result.insert(0, *first);
             return result;
         }
-        _rfind_expand_node(&cache.children()[..*first])
+        _rfind_expand_node(&cache.children()[..*first as usize])
     }
 
     _find_prev_expand(cache, paths)
 }
 
-fn find_prev_node(cache: &HorntailRow, paths: &[usize], text: &str) -> Vec<usize> {
+fn find_prev_node(cache: &HorntailRow, paths: &[u64], text: &str) -> Vec<u64> {
     if text.is_empty() {
         return Vec::with_capacity(0);
     }
 
-    fn _rfind_node(cache: &[HorntailRow], text: &str) -> Vec<usize> {
+    fn _rfind_node(cache: &[HorntailRow], text: &str) -> Vec<u64> {
         let mut result = Vec::with_capacity(0);
         for (index, leaf) in cache.iter().enumerate().rev() {
             let leaf_result = _rfind_node(leaf.children(), text);
             if !leaf_result.is_empty() {
-                result.insert(0, index);
+                result.insert(0, index as u64);
                 result.extend(leaf_result);
                 break;
             } else if leaf.name().contains(text) {
-                result.push(index);
+                result.push(index as u64);
                 break;
             }
         }
         result
     }
 
-    fn _find_prev_node(cache: &HorntailRow, paths: &[usize], text: &str) -> Vec<usize> {
+    fn _find_prev_node(cache: &HorntailRow, paths: &[u64], text: &str) -> Vec<u64> {
         let Some((first, last)) = paths.split_first() else {
             return Vec::with_capacity(0);
         };
         if !last.is_empty() {
-            let leaf = &cache.children()[*first];
+            let leaf = &cache.children()[*first as usize];
             let mut result = _find_prev_node(leaf, last, text);
             if leaf.name().contains(text) || !result.is_empty() {
                 result.insert(0, *first);
                 return result;
             }
         }
-        _rfind_node(&cache.children()[..*first], text)
+        _rfind_node(&cache.children()[..*first as usize], text)
     }
 
     _find_prev_node(cache, paths, text)

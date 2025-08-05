@@ -11,7 +11,7 @@ pub(crate) const SOUND_DX8: &str = "Sound_DX8";
 pub(crate) const RAW_DATA: &str = "RawData";
 pub(crate) const SCRIPT: &str = "Script";
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum ImageKind {
     Canvas,
     Video,
@@ -23,13 +23,13 @@ pub enum ImageKind {
     Script,
 }
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum PropertyKind {
     Plain,
     Encode,
 }
 
-#[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
+#[derive(Debug, Copy, Clone, Ord, PartialOrd, Eq, PartialEq)]
 pub enum EntryKind {
     Folder,
     Image(ImageKind),

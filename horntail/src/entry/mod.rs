@@ -12,7 +12,7 @@ mod uol;
 
 pub use accessor::*;
 pub use canvas::*;
-pub use directory::Directories;
+pub use directory::{Directories, Directory};
 pub use image::Image;
 pub use index::{EntryKind, ImageKind, PropertyKind};
 pub use properties::property::{

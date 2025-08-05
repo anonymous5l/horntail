@@ -1,14 +1,18 @@
 use std::char::DecodeUtf16Error;
 use std::fmt::{Debug, Display, Formatter};
+use std::io::ErrorKind;
+use std::{error, io};
 
 pub enum Error {
-    IO(std::io::Error),
+    IO(io::Error),
     BrokenFile,
     InvalidVersion,
     UnexpectedData(String),
     InvalidCharacter,
     InvalidCipher,
     InvalidDataType,
+    InvalidArgument,
+    Unexpected(Box<dyn error::Error + Send + Sync>),
 }
 
 pub(crate) type Result<T> = std::result::Result<T, Error>;
@@ -29,6 +33,8 @@ impl Display for Error {
             Error::InvalidCharacter => write!(f, "invalid character"),
             Error::InvalidCipher => write!(f, "invalid cipher"),
             Error::InvalidDataType => write!(f, "invalid data type"),
+            Error::InvalidArgument => write!(f, "invalid argument"),
+            Error::Unexpected(e) => write!(f, "unexpected: {e}"),
         }
     }
 }
@@ -45,4 +51,9 @@ impl From<DecodeUtf16Error> for Error {
     fn from(_: DecodeUtf16Error) -> Self {
         Self::InvalidCharacter
     }
+}
+
+#[cold]
+pub(crate) fn io_err_invalid_input() -> Error {
+    Error::IO(io::Error::new(ErrorKind::InvalidInput, "invalid path"))
 }
