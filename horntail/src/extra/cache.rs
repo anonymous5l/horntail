@@ -44,7 +44,7 @@ impl EntryCache {
                 },
             );
         });
-        if let Ok(_) = self.cache.set(cache) {
+        if self.cache.set(cache).is_ok() {
             return Ok(self.cache.get().unwrap());
         }
         panic!("init cache failed");
@@ -88,7 +88,7 @@ impl EntryCache {
             return Ok(None);
         };
         let mut cursor = self.try_get(first)?;
-        while let Some(name) = components.next() {
+        for name in components {
             if let Some(entry) = cursor {
                 cursor = entry.try_get(name)?;
             } else {
@@ -118,7 +118,7 @@ impl EntryCache {
     }
 
     #[inline]
-    pub fn to<'a, T: TryFrom<&'a EntryCache, Error = E>, E: Into<Error>>(&'a self) -> T {
+    pub fn to<'a, T: TryFrom<&'a EntryCache, Error = impl Into<Error>>>(&'a self) -> T {
         self.try_to().unwrap_or_else(|e| panic!("to: {e}"))
     }
 
@@ -188,7 +188,7 @@ impl EntryCache {
     #[inline]
     pub fn try_iter<'a>(&'a self) -> Result<Box<dyn Iterator<Item = &'a EntryCache> + 'a>, Error> {
         let m = self.cache_map()?;
-        Ok(Box::new(m.iter().map(|(_, e)| e)))
+        Ok(Box::new(m.values()))
     }
 
     #[inline]

@@ -4,7 +4,6 @@ use crate::{
     Canvas, CanvasAttribute, Convex2D, EntryKind, Error, ImageKind, RawData, Script, Sound,
     SoundAttribute, TryFromBuilder, UOL, Vector2D,
 };
-use ahash::HashMap;
 
 macro_rules! impl_try_from_entry_cache {
     ($typ:tt) => {
@@ -176,7 +175,7 @@ where
     fn try_from(entry: &'a EntryCache) -> Result<Self, Self::Error> {
         let mut result = vec![];
         for x in entry.try_iter()? {
-            result.push(T::try_from(&x).map_err(Into::into)?)
+            result.push(T::try_from(x).map_err(Into::into)?)
         }
         Ok(result)
     }

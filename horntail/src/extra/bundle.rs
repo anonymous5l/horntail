@@ -17,6 +17,8 @@ pub struct Bundle {
     files: Vec<WizetFile>,
 }
 
+pub type OptAndBuilder = (AccessorOpt, Box<dyn AccessorBuilder>);
+
 impl Bundle {
     pub fn from_path<P: AsRef<Path>>(
         path: P,
@@ -74,10 +76,7 @@ impl Bundle {
             .unwrap_or_else(|e| panic!("load_by_name: {e}"))
     }
 
-    pub fn builders(
-        &self,
-        cipher: &dyn MapleCipher,
-    ) -> Result<Vec<(AccessorOpt, Box<dyn AccessorBuilder>)>, Error> {
+    pub fn builders(&self, cipher: &dyn MapleCipher) -> Result<Vec<OptAndBuilder>, Error> {
         let mut builders = Vec::with_capacity(self.files.len());
         for f in &self.files {
             let mmap = f.source().open()?;
@@ -99,7 +98,7 @@ fn load_complex_struct(
 ) -> Option<Vec<WizetFile>> {
     let parent_path = path.parent()?;
     let file_stem = path.file_stem().and_then(|s| s.to_str())?;
-    let complex_struct = parent_path.join(&file_stem).with_extension(INI_EXTENSION);
+    let complex_struct = parent_path.join(file_stem).with_extension(INI_EXTENSION);
     let complex_file = File::open(complex_struct).ok()?;
     let mut complex_reader = io::BufReader::new(complex_file);
     let mut first_line = String::with_capacity(128);

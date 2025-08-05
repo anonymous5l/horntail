@@ -83,13 +83,10 @@ impl Entry {
     pub fn has_children(&self) -> bool {
         match &self.value {
             EntryValue::Kind(k) => match k {
-                EntryKind::Image(img) => match img {
-                    ImageKind::Canvas
-                    | ImageKind::Video
-                    | ImageKind::Sound
-                    | ImageKind::RawData => true,
-                    _ => false,
-                },
+                EntryKind::Image(img) => matches!(
+                    img,
+                    ImageKind::Canvas | ImageKind::Video | ImageKind::Sound | ImageKind::RawData
+                ),
                 EntryKind::Folder | EntryKind::Property(_) => true,
             },
             EntryValue::Primitive(_) => false,
@@ -132,7 +129,7 @@ impl Entry {
             return Ok(None);
         };
         let mut cursor = self.try_get(first)?;
-        while let Some(name) = components.next() {
+        for name in components {
             if let Some(entry) = cursor {
                 cursor = entry.try_get(name)?;
             } else {
@@ -155,14 +152,14 @@ impl Entry {
     }
 
     #[inline]
-    pub fn try_to<'a, E: Into<Error>, T: TryFrom<&'a Entry, Error = E>>(
+    pub fn try_to<'a, T: TryFrom<&'a Entry, Error = impl Into<Error>>>(
         &'a self,
     ) -> Result<T, Error> {
         T::try_from(self).map_err(|e| e.into())
     }
 
     #[inline]
-    pub fn to<'a, E: Into<Error>, T: TryFrom<&'a Entry, Error = E>>(&'a self) -> T {
+    pub fn to<'a, T: TryFrom<&'a Entry, Error = impl Into<Error>>>(&'a self) -> T {
         self.try_to().unwrap_or_else(|e| panic!("to: {e}"))
     }
 
