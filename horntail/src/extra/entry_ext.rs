@@ -33,7 +33,14 @@ macro_rules! impl_try_from_numerics {
                         EntryPrimitive::Float32(f) => Ok(*f as $typ),
                         EntryPrimitive::Float64(f) => Ok(*f as $typ),
                         EntryPrimitive::String(s) => {
-                            Ok(s.parse().map_err(|_| Error::InvalidDataType)?)
+                            if s.is_empty() {
+                                Ok($typ::default())
+                            } else {
+                                Ok(s.parse().map_err(|_|
+                                    Error::UnexpectedData(
+                                        format!("try convert string `{s}` to number."))
+                                )?)
+                            }
                         }
                         _ => Err(Error::InvalidDataType),
                     },

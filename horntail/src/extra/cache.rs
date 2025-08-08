@@ -47,7 +47,9 @@ impl EntryCache {
         if self.cache.set(cache).is_ok() {
             return Ok(self.cache.get().unwrap());
         }
-        panic!("init cache failed");
+        Err(Error::Unexpected(
+            "init cache failed on `OnceCell::set`".into(),
+        ))
     }
 
     #[inline]
